@@ -4,7 +4,7 @@ import { logger } from "../utils/logger";
 
 export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   // Ruta para enviar notificaciones via HTTP (para integración con API principal)
-  app.post("/api/notify", (req, res) => {
+  app.post("/api/notify", (req, res): any => {
     try {
       const { targetUserId, targetRole, event, data } = req.body;
 
@@ -26,14 +26,14 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         logger.info(`📤 Notificación HTTP broadcast a todos`);
       }
 
-      res.json({
+      return res.json({
         success: true,
         message: "Notificación enviada",
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
       logger.error("Error enviando notificación:", error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: "Error interno del servidor",
       });
@@ -41,7 +41,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para obtener estadísticas de conexiones
-  app.get("/api/stats", (req, res) => {
+  app.get("/api/stats", (req, res): any => {
     res.json({
       success: true,
       data: {
@@ -54,7 +54,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para verificar si un usuario está conectado
-  app.get("/api/user/:userId/status", (req, res) => {
+  app.get("/api/user/:userId/status", (req, res): any => {
     const { userId } = req.params;
     const isConnected = wsManager.isUserConnected(userId);
 
@@ -71,7 +71,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   // === RUTAS ESPECÍFICAS PARA IoT ELÉCTRICO ===
 
   // Ruta para recibir lecturas de voltaje
-  app.post("/api/iot/voltage", (req, res) => {
+  app.post("/api/iot/voltage", (req, res): any => {
     try {
       const { deviceId, voltage, phase, quality, location } = req.body;
 
@@ -107,7 +107,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
 
       logger.info(`⚡ Lectura de voltaje externa - ${deviceId}: ${voltage}V`);
 
-      res.json({
+      return res.json({
         success: true,
         message: "Lectura de voltaje procesada",
         deviceId,
@@ -124,7 +124,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para recibir lecturas de corriente
-  app.post("/api/iot/current", (req, res) => {
+  app.post("/api/iot/current", (req, res): any => {
     try {
       const { deviceId, current, phase, powerFactor, location } = req.body;
 
@@ -160,7 +160,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
 
       logger.info(`🔋 Lectura de corriente externa - ${deviceId}: ${current}A`);
 
-      res.json({
+      return res.json({
         success: true,
         message: "Lectura de corriente procesada",
         deviceId,
@@ -177,7 +177,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para recibir datos de consumo de energía
-  app.post("/api/iot/power", (req, res) => {
+  app.post("/api/iot/power", (req, res): any => {
     try {
       const {
         deviceId,
@@ -227,7 +227,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         `📊 Consumo de energía externo - ${deviceId}: ${activePower}W, ${energy}kWh`
       );
 
-      res.json({
+      return res.json({
         success: true,
         message: "Datos de consumo procesados",
         deviceId,
@@ -245,7 +245,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para reportar estado de conexión de dispositivos
-  app.post("/api/iot/connection", (req, res) => {
+  app.post("/api/iot/connection", (req, res): any => {
     try {
       const { deviceId, status, lastSeen, metadata } = req.body;
 
@@ -286,7 +286,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
 
       logger.info(`🔌 Estado de conexión externo - ${deviceId}: ${status}`);
 
-      res.json({
+      return res.json({
         success: true,
         message: "Estado de conexión actualizado",
         deviceId,
@@ -305,7 +305,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   // === RUTAS PARA CONTROL HARDWARE ===
 
   // Ruta para comandos Arduino
-  app.post("/api/hardware/arduino", (req, res) => {
+  app.post("/api/hardware/arduino", (req, res): any => {
     try {
       const { deviceId, command, target, parameters } = req.body;
 
@@ -324,16 +324,14 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       }
 
       // Enviar comando Arduino via WebSocket
-      const commandId = wsManager.sendArduinoCommand(
-        deviceId,
-        command,
+      const commandId = wsManager.sendArduinoCommand(deviceId, command, {
         target,
-        parameters
-      );
+        ...parameters,
+      });
 
       logger.info(`🎛️ Comando Arduino externo - ${deviceId}: ${command}`);
 
-      res.json({
+      return res.json({
         success: true,
         message: "Comando Arduino enviado",
         deviceId,
@@ -351,7 +349,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para control de relés
-  app.post("/api/hardware/relay", (req, res) => {
+  app.post("/api/hardware/relay", (req, res): any => {
     try {
       const { deviceId, relayId, action, duration, priority } = req.body;
 
@@ -372,16 +370,14 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       // Enviar comando de relé via WebSocket
       const commandId = wsManager.controlRelay(
         deviceId,
-        relayId,
-        action,
-        priority || "normal"
+        `${relayId}:${action}:${priority || "normal"}`
       );
 
       logger.info(
         `🔌 Control relé externo - ${deviceId}/${relayId}: ${action}`
       );
 
-      res.json({
+      return res.json({
         success: true,
         message: "Comando de relé enviado",
         deviceId,
@@ -400,7 +396,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para lecturas de sensores
-  app.post("/api/hardware/sensor", (req, res) => {
+  app.post("/api/hardware/sensor", (req, res): any => {
     try {
       const { deviceId, sensorType, value, unit, location, calibrated } =
         req.body;
@@ -456,7 +452,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         `🌡️ Lectura sensor externa - ${deviceId}/${sensorType}: ${value}${unit}`
       );
 
-      res.json({
+      return res.json({
         success: true,
         message: "Lectura de sensor procesada",
         deviceId,
@@ -475,7 +471,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para métricas de performance
-  app.post("/api/hardware/metrics", (req, res) => {
+  app.post("/api/hardware/metrics", (req, res): any => {
     try {
       const {
         deviceId,
@@ -525,7 +521,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         `📊 Métricas performance externas - ${deviceId}: CPU ${cpuUsage}%, Temp ${temperature}°C`
       );
 
-      res.json({
+      return res.json({
         success: true,
         message: "Métricas de performance procesadas",
         deviceId,
@@ -541,7 +537,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para configuración de dispositivos
-  app.post("/api/hardware/config", (req, res) => {
+  app.post("/api/hardware/config", (req, res): any => {
     try {
       const { deviceId, configType, configuration, applyImmediately } =
         req.body;
@@ -568,17 +564,16 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       }
 
       // Enviar configuración via WebSocket
-      const configId = wsManager.updateDeviceConfig(
-        deviceId,
+      const configId = wsManager.updateDeviceConfig(deviceId, {
         configType,
-        configuration
-      );
+        ...configuration,
+      });
 
       logger.info(
         `⚙️ Configuración dispositivo externa - ${deviceId}: ${configType}`
       );
 
-      res.json({
+      return res.json({
         success: true,
         message: "Configuración de dispositivo enviada",
         deviceId,
@@ -596,7 +591,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para control remoto de dispositivos (mantener compatibilidad)
-  app.post("/api/iot/control", (req, res) => {
+  app.post("/api/iot/control", (req, res): any => {
     try {
       const { deviceId, switchId, action, reason } = req.body;
 
@@ -639,7 +634,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
 
       logger.info(`🎛️ Comando de control externo - ${deviceId}: ${action}`);
 
-      res.json({
+      return res.json({
         success: true,
         message: "Comando de control enviado",
         deviceId,
@@ -656,7 +651,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta genérica para datos IoT (mantener compatibilidad)
-  app.post("/api/iot/data", (req, res) => {
+  app.post("/api/iot/data", (req, res): any => {
     try {
       const iotData = req.body;
 
@@ -685,7 +680,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         `📊 Datos IoT externos recibidos del dispositivo: ${iotData.deviceId}`
       );
 
-      res.json({
+      return res.json({
         success: true,
         message: "Datos IoT procesados",
         deviceId: iotData.deviceId,
@@ -701,7 +696,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Ruta para enviar alertas IoT
-  app.post("/api/iot/alert", (req, res) => {
+  app.post("/api/iot/alert", (req, res): any => {
     try {
       const alertData = req.body;
 
@@ -724,7 +719,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         `🚨 Alerta IoT externa del dispositivo: ${alertData.deviceId} - ${alertData.message}`
       );
 
-      res.json({
+      return res.json({
         success: true,
         message: "Alerta enviada",
         deviceId: alertData.deviceId,
@@ -742,7 +737,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   // === RUTAS PARA ANÁLISIS PREDICTIVO ===
 
   // Obtener predicción para un dispositivo específico
-  app.get("/api/analytics/prediction/:deviceId/:type", (req, res) => {
+  app.get("/api/analytics/prediction/:deviceId/:type", (req, res): any => {
     try {
       const { deviceId, type } = req.params;
 
@@ -755,7 +750,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: prediction,
         timestamp: new Date().toISOString(),
@@ -770,7 +765,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Obtener métricas de eficiencia para un dispositivo
-  app.get("/api/analytics/efficiency/:deviceId", (req, res) => {
+  app.get("/api/analytics/efficiency/:deviceId", (req, res): any => {
     try {
       const { deviceId } = req.params;
 
@@ -783,7 +778,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: efficiency,
         timestamp: new Date().toISOString(),
@@ -798,13 +793,13 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Detectar anomalías en un dispositivo
-  app.get("/api/analytics/anomalies/:deviceId/:type", (req, res) => {
+  app.get("/api/analytics/anomalies/:deviceId/:type", (req, res): any => {
     try {
       const { deviceId, type } = req.params;
 
       const hasAnomaly = wsManager.detectDeviceAnomalies(deviceId, type);
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           deviceId,
@@ -823,11 +818,11 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Obtener estadísticas del análisis predictivo
-  app.get("/api/analytics/stats", (req, res) => {
+  app.get("/api/analytics/stats", (req, res): any => {
     try {
       const stats = wsManager.getAnalyticsStats();
 
-      res.json({
+      return res.json({
         success: true,
         data: stats,
         timestamp: new Date().toISOString(),
@@ -842,11 +837,11 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Forzar ejecución de análisis predictivo
-  app.post("/api/analytics/trigger", (req, res) => {
+  app.post("/api/analytics/trigger", (req, res): any => {
     try {
       wsManager.triggerPredictiveAnalysis();
 
-      res.json({
+      return res.json({
         success: true,
         message: "Análisis predictivo ejecutado",
         timestamp: new Date().toISOString(),
@@ -861,7 +856,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Obtener recomendaciones de eficiencia para todos los dispositivos
-  app.get("/api/analytics/efficiency-report", (req, res) => {
+  app.get("/api/analytics/efficiency-report", (req, res): any => {
     try {
       const devices = ["DEV001", "DEV002", "DEV003", "ARD001", "ARD002"];
       const report = [];
@@ -890,7 +885,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         0
       );
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           devices: report,
@@ -916,7 +911,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   // ===== RUTAS DE MACHINE LEARNING =====
 
   // Entrenar modelo ML
-  app.post("/api/ml/train", async (req, res) => {
+  app.post("/api/ml/train", async (req, res): Promise<any> => {
     try {
       const { deviceId, dataType } = req.body;
 
@@ -929,7 +924,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
 
       await wsManager.trainModels(deviceId, dataType);
 
-      res.json({
+      return res.json({
         success: true,
         message: "Entrenamiento de modelo iniciado",
         timestamp: new Date().toISOString(),
@@ -944,7 +939,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Generar pronóstico avanzado
-  app.post("/api/ml/forecast", async (req, res) => {
+  app.post("/api/ml/forecast", async (req, res): Promise<any> => {
     try {
       const { deviceId, dataType, hoursAhead = 24 } = req.body;
 
@@ -955,11 +950,11 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         });
       }
 
-      const forecast = await wsManager.generateAdvancedForecast(
+      const forecast = await wsManager.generateAdvancedForecast({
         deviceId,
         dataType,
-        hoursAhead
-      );
+        hoursAhead,
+      });
 
       if (!forecast) {
         return res.status(404).json({
@@ -968,7 +963,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: forecast,
         timestamp: new Date().toISOString(),
@@ -983,15 +978,12 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Analizar patrones de dispositivo
-  app.get("/api/ml/patterns/:deviceId", async (req, res) => {
+  app.get("/api/ml/patterns/:deviceId", async (req, res): Promise<any> => {
     try {
       const { deviceId } = req.params;
       const { dataType = "power" } = req.query;
 
-      const patterns = await wsManager.analyzeDevicePatterns(
-        deviceId,
-        dataType as string
-      );
+      const patterns = await wsManager.analyzeDevicePatterns(deviceId);
 
       if (!patterns) {
         return res.status(404).json({
@@ -1000,7 +992,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: patterns,
         timestamp: new Date().toISOString(),
@@ -1015,11 +1007,11 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Optimizar modelos ML
-  app.post("/api/ml/optimize", async (req, res) => {
+  app.post("/api/ml/optimize", async (req, res): Promise<any> => {
     try {
       await wsManager.optimizeMLModels();
 
-      res.json({
+      return res.json({
         success: true,
         message: "Optimización de modelos iniciada",
         timestamp: new Date().toISOString(),
@@ -1034,11 +1026,11 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Obtener estadísticas de ML
-  app.get("/api/ml/stats", (req, res) => {
+  app.get("/api/ml/stats", (req, res): any => {
     try {
       const stats = wsManager.getMLStats();
 
-      res.json({
+      return res.json({
         success: true,
         data: stats,
         timestamp: new Date().toISOString(),
@@ -1055,7 +1047,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   // ===== RUTAS DE REPORTES AVANZADOS =====
 
   // Generar reporte completo
-  app.post("/api/reports/generate", async (req, res) => {
+  app.post("/api/reports/generate", async (req, res): Promise<any> => {
     try {
       const config = req.body;
 
@@ -1075,7 +1067,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: report,
         timestamp: new Date().toISOString(),
@@ -1090,7 +1082,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Configurar reporte automático
-  app.post("/api/reports/configure", (req, res) => {
+  app.post("/api/reports/configure", (req, res): any => {
     try {
       const config = req.body;
 
@@ -1103,7 +1095,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
 
       wsManager.configureAutomaticReport(config);
 
-      res.json({
+      return res.json({
         success: true,
         message: "Reporte automático configurado",
         timestamp: new Date().toISOString(),
@@ -1118,11 +1110,11 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Obtener reportes generados
-  app.get("/api/reports/generated", (req, res) => {
+  app.get("/api/reports/generated", (req, res): any => {
     try {
       const reports = wsManager.getGeneratedReports();
 
-      res.json({
+      return res.json({
         success: true,
         data: reports,
         timestamp: new Date().toISOString(),
@@ -1137,11 +1129,11 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Obtener configuraciones de reportes
-  app.get("/api/reports/configs", (req, res) => {
+  app.get("/api/reports/configs", (req, res): any => {
     try {
       const configs = wsManager.getReportConfigs();
 
-      res.json({
+      return res.json({
         success: true,
         data: configs,
         timestamp: new Date().toISOString(),
@@ -1156,7 +1148,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Obtener reporte específico
-  app.get("/api/reports/:reportId", (req, res) => {
+  app.get("/api/reports/:reportId", (req, res): any => {
     try {
       const { reportId } = req.params;
       const reports = wsManager.getGeneratedReports();
@@ -1169,7 +1161,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: report,
         timestamp: new Date().toISOString(),
@@ -1184,7 +1176,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Generar reporte de eficiencia energética
-  app.post("/api/reports/efficiency", async (req, res) => {
+  app.post("/api/reports/efficiency", async (req, res): Promise<any> => {
     try {
       const { devices, period = "weekly" } = req.body;
 
@@ -1217,21 +1209,21 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           reportId: report.id,
           summary: report.summary,
-          deviceReports: report.deviceReports.map((d) => ({
+          deviceReports: report.deviceReports.map((d: any) => ({
             deviceId: d.deviceId,
             efficiency: d.efficiency,
             status: d.status,
             uptime: d.uptime,
           })),
           recommendations: report.recommendations.filter(
-            (r) => r.category === "efficiency"
+            (r: any) => r.category === "efficiency"
           ),
-          charts: report.charts.filter((c) => c.id.includes("efficiency")),
+          charts: report.charts.filter((c: any) => c.id.includes("efficiency")),
         },
         timestamp: new Date().toISOString(),
       });
@@ -1245,7 +1237,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Generar reporte de mantenimiento predictivo
-  app.post("/api/reports/maintenance", async (req, res) => {
+  app.post("/api/reports/maintenance", async (req, res): Promise<any> => {
     try {
       const { devices } = req.body;
 
@@ -1278,21 +1270,21 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           reportId: report.id,
           summary: report.summary,
-          deviceReports: report.deviceReports.map((d) => ({
+          deviceReports: report.deviceReports.map((d: any) => ({
             deviceId: d.deviceId,
             maintenance: d.maintenance,
             status: d.status,
             alerts: d.alerts.filter(
-              (a) => a.severity === "high" || a.severity === "critical"
+              (a: any) => a.severity === "high" || a.severity === "critical"
             ),
           })),
           recommendations: report.recommendations.filter(
-            (r) => r.category === "maintenance"
+            (r: any) => r.category === "maintenance"
           ),
           predictions: report.predictions,
         },
@@ -1308,10 +1300,10 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
   });
 
   // Generar dashboard de analytics en tiempo real
-  app.get("/api/analytics/dashboard", (req, res) => {
+  app.get("/api/analytics/dashboard", (req, res): any => {
     try {
       const devices = ["DEV001", "DEV002", "DEV003", "ARD001", "ARD002"];
-      const dashboard = {
+      const dashboard: any = {
         timestamp: new Date().toISOString(),
         devices: [],
         systemHealth: "good",
@@ -1342,8 +1334,10 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       // Determinar salud del sistema
       const avgEfficiency =
         dashboard.devices.length > 0
-          ? dashboard.devices.reduce((sum, d) => sum + d.efficiency, 0) /
-            dashboard.devices.length
+          ? dashboard.devices.reduce(
+              (sum: any, d: any) => sum + d.efficiency,
+              0
+            ) / dashboard.devices.length
           : 0;
 
       if (avgEfficiency > 85) dashboard.systemHealth = "excellent";
@@ -1351,7 +1345,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       else if (avgEfficiency > 50) dashboard.systemHealth = "warning";
       else dashboard.systemHealth = "critical";
 
-      res.json({
+      return res.json({
         success: true,
         data: dashboard,
       });
@@ -1366,3 +1360,6 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
 
   logger.info("🛣️ Rutas avanzadas de Fase 3 configuradas");
 }
+
+
+
