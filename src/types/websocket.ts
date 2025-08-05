@@ -12,24 +12,12 @@ export type UserRole = "cliente" | "empresa" | "superadmin";
 export type UserType = "cliente" | "empresa" | "superadmin";
 
 // Tipos de conexión
-export interface UserSocket {
-  id: string;
+import { Socket } from "socket.io";
+
+export interface UserSocket extends Socket {
   userId?: string;
   userRole?: UserRole;
   userType?: UserType;
-  connected: boolean;
-  handshake: {
-    auth: {
-      userId?: string;
-      userRole?: UserRole;
-      userType?: UserType;
-      token?: string;
-    };
-  };
-  join: (room: string) => void;
-  leave: (room: string) => void;
-  emit: (event: string, data: unknown) => void;
-  disconnect: () => void;
 }
 
 // Tipos de dispositivos IoT
