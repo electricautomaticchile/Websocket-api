@@ -1,6 +1,7 @@
 import { logger } from "../utils/logger";
 import { ConnectionManager } from "./ConnectionManager";
 import { MachineLearning } from "./MachineLearning";
+import { PermissionFilter } from "./PermissionFilter";
 import {
   UserSocket,
   MLTrainingData,
@@ -21,9 +22,25 @@ export class MLEventHandler {
   }
 
   setupEventHandlers(socket: UserSocket): void {
-    // Entrenamiento de modelos
+    // Solo superadmin y empresa pueden acceder a funciones ML
+    if (!["superadmin", "empresa"].includes(socket.userRole || "")) {
+      logger.warn(
+        `Acceso ML denegado para rol ${socket.userRole}`,
+        "MLEventHandler"
+      );
+      return;
+    }
+
+    // Entrenamiento de modelos (solo superadmin)
     socket.on("ml:train", (data: MLTrainingData) => {
-      this.handleModelTraining(socket, data);
+      if (socket.userRole === "superadmin") {
+        this.handleModelTraining(socket, data);
+      } else {
+        socket.emit("ml:access_denied", {
+          action: "train",
+          reason: "Solo superadmin puede entrenar modelos",
+        });
+      }
     });
 
     // Generación de pronósticos
@@ -36,9 +53,16 @@ export class MLEventHandler {
       this.handlePatternAnalysis(socket, data);
     });
 
-    // Optimización de modelos
+    // Optimización de modelos (solo superadmin)
     socket.on("ml:optimize", () => {
-      this.handleModelOptimization(socket);
+      if (socket.userRole === "superadmin") {
+        this.handleModelOptimization(socket);
+      } else {
+        socket.emit("ml:access_denied", {
+          action: "optimize",
+          reason: "Solo superadmin puede optimizar modelos",
+        });
+      }
     });
   }
 
@@ -71,9 +95,9 @@ export class MLEventHandler {
           timestamp: new Date().toISOString(),
         };
 
-        // Notificar a administradores
+        // Notificar según permisos
         this.connectionManager.sendToRole(
-          "admin",
+          "superadmin",
           "ml:model_trained",
           eventData
         );
@@ -133,33 +157,48 @@ export class MLEventHandler {
           timestamp: new Date().toISOString(),
         };
 
-        // Notificar a administradores
-        this.connectionManager.sendToRole(
-          "admin",
-          "ml:forecast_generated",
-          eventData
-        );
+        // Filtrar datos según permisos del usuario
+        const filteredEventData = this.filterMLDataByRole(socket, eventData);
+
+        // Notificar según rol
+        if (socket.userRole === "superadmin") {
+          this.connectionManager.sendToRole(
+            "superadmin",
+            "ml:forecast_generated",
+            eventData
+          );
+        } else {
+          this.connectionManager.sendToRole(
+            "empresa",
+            "ml:forecast_generated",
+            filteredEventData
+          );
+        }
 
         // Notificar al usuario que solicitó el pronóstico
         if (socket.userId) {
           this.connectionManager.sendToUser(
             socket.userId,
             "ml:forecast_ready",
-            eventData
+            filteredEventData
           );
         }
 
-        // Enviar predicciones críticas si las hay
+        // Enviar predicciones críticas solo a usuarios autorizados
         const criticalPredictions = forecast.predictions.filter(
           (p) => p.confidence > 0.8
         );
         if (criticalPredictions.length > 0) {
-          this.connectionManager.broadcastToAll("ml:critical_predictions", {
-            deviceId: data.deviceId,
-            dataType: data.dataType,
-            predictions: criticalPredictions,
-            timestamp: new Date().toISOString(),
-          });
+          this.connectionManager.sendToAuthorizedUsers(
+            "ml:critical_predictions",
+            {
+              deviceId: data.deviceId,
+              dataType: data.dataType,
+              predictions: criticalPredictions,
+              timestamp: new Date().toISOString(),
+            },
+            data.deviceId
+          );
         }
       }
     } catch (error) {
@@ -204,33 +243,48 @@ export class MLEventHandler {
         timestamp: new Date().toISOString(),
       };
 
-      // Notificar a administradores
-      this.connectionManager.sendToRole(
-        "admin",
-        "ml:patterns_analyzed",
-        eventData
-      );
+      // Filtrar datos según permisos
+      const filteredEventData = this.filterMLDataByRole(socket, eventData);
+
+      // Notificar según rol
+      if (socket.userRole === "superadmin") {
+        this.connectionManager.sendToRole(
+          "superadmin",
+          "ml:patterns_analyzed",
+          eventData
+        );
+      } else {
+        this.connectionManager.sendToRole(
+          "empresa",
+          "ml:patterns_analyzed",
+          filteredEventData
+        );
+      }
 
       // Notificar al usuario que solicitó el análisis
       if (socket.userId) {
         this.connectionManager.sendToUser(
           socket.userId,
           "ml:analysis_ready",
-          eventData
+          filteredEventData
         );
       }
 
-      // Alertar sobre patrones críticos
+      // Alertar sobre patrones críticos solo a usuarios autorizados
       const criticalPatterns = patterns.patterns.filter(
         (p) => p.impact === "high"
       );
       if (criticalPatterns.length > 0) {
-        this.connectionManager.sendToRole("admin", "ml:critical_patterns", {
-          deviceId: data.deviceId,
-          dataType: data.dataType,
-          patterns: criticalPatterns,
-          timestamp: new Date().toISOString(),
-        });
+        this.connectionManager.sendToAuthorizedUsers(
+          "ml:critical_patterns",
+          {
+            deviceId: data.deviceId,
+            dataType: data.dataType,
+            patterns: criticalPatterns,
+            timestamp: new Date().toISOString(),
+          },
+          data.deviceId
+        );
       }
     } catch (error) {
       logger.error("Error analizando patrones ML", "MLEventHandler", { error });
@@ -263,7 +317,7 @@ export class MLEventHandler {
 
       // Notificar a administradores
       this.connectionManager.sendToRole(
-        "admin",
+        "superadmin",
         "ml:models_optimized",
         eventData
       );
@@ -303,9 +357,9 @@ export class MLEventHandler {
 
       const stats = this.machineLearning.getModelStats();
 
-      // Notificar a administradores sobre optimización automática
+      // Notificar solo a superadmin sobre optimización automática
       this.connectionManager.sendToRole(
-        "admin",
+        "superadmin",
         "ml:auto_optimization_completed",
         {
           stats,
@@ -325,6 +379,49 @@ export class MLEventHandler {
         "MLEventHandler",
         { error }
       );
+    }
+  }
+
+  // Filtrar datos ML según el rol del usuario
+  private filterMLDataByRole(socket: UserSocket, data: any): any {
+    const { userRole } = socket;
+
+    switch (userRole) {
+      case "superadmin":
+        return data; // Acceso completo
+
+      case "empresa":
+        // Empresa ve datos agregados sin detalles técnicos sensibles
+        return {
+          deviceId: data.deviceId,
+          dataType: data.dataType,
+          timestamp: data.timestamp,
+          // Para forecasts
+          forecast: data.forecast
+            ? {
+                predictions: data.forecast.predictions?.map((p: any) => ({
+                  timestamp: p.timestamp,
+                  value: p.value,
+                  confidence: Math.min(p.confidence, 0.8), // Limitar confianza mostrada
+                })),
+                accuracy: data.forecast.accuracy
+                  ? Math.round(data.forecast.accuracy * 100) / 100
+                  : undefined,
+              }
+            : undefined,
+          // Para patterns
+          patterns: data.patterns
+            ? {
+                patterns: data.patterns.patterns?.filter(
+                  (p: any) => p.impact !== "critical"
+                ), // Filtrar patrones críticos
+                summary: data.patterns.summary,
+              }
+            : undefined,
+        };
+
+      default:
+        return null;
     }
   }
 }

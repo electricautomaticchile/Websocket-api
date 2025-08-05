@@ -1131,3 +1131,4 @@ export class AdvancedReporting {
     return Array.from(this.reportConfigs.values());
   }
 }
+

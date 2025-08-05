@@ -30,6 +30,12 @@ export interface EfficiencyMetrics {
   recommendations: string[];
 }
 
+interface LinearRegressionResult {
+  slope: number;
+  intercept: number;
+  rSquared: number;
+}
+
 export class PredictiveAnalytics {
   private dataHistory: Map<string, DataPoint[]> = new Map();
   private readonly MAX_HISTORY_POINTS = 1000;
@@ -53,6 +59,23 @@ export class PredictiveAnalytics {
 
     // Ordenar por timestamp
     history.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  }
+
+  // Limpiar datos antiguos (más viejos que hoursToKeep)
+  cleanOldData(hoursToKeep: number): void {
+    const cutoffTime = new Date(Date.now() - hoursToKeep * 60 * 60 * 1000);
+
+    this.dataHistory.forEach((points, key) => {
+      const filteredPoints = points.filter(
+        (point) => point.timestamp.getTime() > cutoffTime.getTime()
+      );
+      this.dataHistory.set(key, filteredPoints);
+    });
+
+    logger.debug(
+      `Datos antiguos eliminados (>${hoursToKeep} horas)`,
+      "PredictiveAnalytics"
+    );
   }
 
   // Análisis predictivo usando regresión lineal simple
@@ -218,12 +241,7 @@ export class PredictiveAnalytics {
     return Math.abs(currentValue - mean) > 2 * stdDev;
   }
 
-  // Interfaces para regresión lineal
-  interface LinearRegressionResult {
-    slope: number;
-    intercept: number;
-    rSquared: number;
-  }
+  // Interfaces para regresión lineal movidas arriba
 
   // Calcular regresión lineal
   private calculateLinearRegression(data: DataPoint[]): LinearRegressionResult {
@@ -471,19 +489,5 @@ export class PredictiveAnalytics {
     };
   }
 
-  // Limpiar historial antiguo
-  cleanOldData(hoursToKeep: number = 24) {
-    const cutoffTime = new Date(Date.now() - hoursToKeep * 60 * 60 * 1000);
-
-    for (const [key, history] of this.dataHistory.entries()) {
-      const filteredHistory = history.filter(
-        (point) => point.timestamp >= cutoffTime
-      );
-      this.dataHistory.set(key, filteredHistory);
-    }
-
-    logger.info(
-      `🧹 Historial limpiado: manteniendo datos de las últimas ${hoursToKeep} horas`
-    );
-  }
+  // Función duplicada eliminada - usar la implementación anterior
 }

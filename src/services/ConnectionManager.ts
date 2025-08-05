@@ -67,8 +67,8 @@ export class ConnectionManager {
     this.leaveAllRooms(socket);
   }
 
-  // Unir a salas automáticas
-  private joinAutomaticRooms(socket: UserSocket): void {
+  // Unir a salas automáticas con filtrado por rol
+  private async joinAutomaticRooms(socket: UserSocket): Promise<void> {
     const { userId, userRole, userType } = socket;
 
     // Sala personal del usuario
@@ -86,8 +86,76 @@ export class ConnectionManager {
       this.joinRoom(socket, `type:${userType}`);
     }
 
-    // Sala general
-    this.joinRoom(socket, "general");
+    // Salas específicas según el rol
+    await this.joinRoleSpecificRooms(socket);
+
+    // Sala general (solo para superadmin y empresa)
+    if (userRole === "superadmin" || userRole === "empresa") {
+      this.joinRoom(socket, "general");
+    }
+  }
+
+  // Unir a salas específicas según el rol del usuario
+  private async joinRoleSpecificRooms(socket: UserSocket): Promise<void> {
+    const { userId, userRole } = socket;
+
+    try {
+      switch (userRole) {
+        case "superadmin":
+          // Superadmin se une a todas las salas de monitoreo
+          this.joinRoom(socket, "admin:global");
+          this.joinRoom(socket, "admin:alerts");
+          this.joinRoom(socket, "admin:commands");
+          this.joinRoom(socket, "admin:ml");
+          this.joinRoom(socket, "admin:reports");
+          break;
+
+        case "empresa":
+          // Empresa se une a salas de sus clientes asignados
+          await this.joinEmpresaRooms(socket, userId!);
+          break;
+
+        case "cliente":
+          // Cliente se une solo a salas de sus dispositivos
+          this.joinRoom(socket, `cliente:${userId}`);
+          this.joinRoom(socket, `devices:cliente:${userId}`);
+          break;
+      }
+    } catch (error) {
+      logger.error(
+        `Error joining role-specific rooms for user ${userId}:`,
+        error
+      );
+    }
+  }
+
+  // Unir empresa a salas de sus clientes asignados
+  private async joinEmpresaRooms(
+    socket: UserSocket,
+    empresaId: string
+  ): Promise<void> {
+    try {
+      // Aquí se haría una consulta a la base de datos para obtener los clientes asignados
+      // Por ahora simulamos la lógica
+      this.joinRoom(socket, `empresa:${empresaId}`);
+      this.joinRoom(socket, `empresa:alerts:${empresaId}`);
+      this.joinRoom(socket, `empresa:devices:${empresaId}`);
+
+      // En una implementación real, se consultarían los clientes asignados
+      // const empresa = await Empresa.findById(empresaId).populate('clientesAsignados');
+      // if (empresa?.clientesAsignados) {
+      //   empresa.clientesAsignados.forEach((cliente: any) => {
+      //     this.joinRoom(socket, `devices:cliente:${cliente._id}`);
+      //   });
+      // }
+
+      logger.debug(
+        `Empresa ${empresaId} joined specific rooms`,
+        "ConnectionManager"
+      );
+    } catch (error) {
+      logger.error(`Error joining empresa rooms for ${empresaId}:`, error);
+    }
   }
 
   // Unir a sala específica
@@ -143,7 +211,7 @@ export class ConnectionManager {
     }
   }
 
-  // Métodos públicos para enviar mensajes
+  // Métodos públicos para enviar mensajes con filtrado por permisos
   sendToUser(userId: string, event: string, data: unknown): void {
     this.io.to(`user:${userId}`).emit(event, data);
     logger.debug(`Mensaje enviado a usuario ${userId}`, "ConnectionManager", {
@@ -175,6 +243,84 @@ export class ConnectionManager {
   broadcastToAll(event: string, data: unknown): void {
     this.io.emit(event, data);
     logger.debug("Mensaje broadcast a todos", "ConnectionManager", { event });
+  }
+
+  // Nuevos métodos para envío filtrado por permisos
+  sendToAuthorizedUsers(event: string, data: any, deviceId?: string): void {
+    if (!deviceId) {
+      // Si no hay deviceId, enviar solo a superadmin
+      this.sendToRole("superadmin", event, data);
+      return;
+    }
+
+    // Enviar a superadmin (siempre autorizado)
+    this.sendToRole("superadmin", event, data);
+
+    // Enviar a empresa si el dispositivo está asignado
+    // En una implementación real, se consultaría la base de datos
+    this.sendToRoom(`devices:${deviceId}`, event, data);
+
+    logger.debug(
+      `Mensaje enviado a usuarios autorizados para dispositivo ${deviceId}`,
+      "ConnectionManager",
+      {
+        event,
+      }
+    );
+  }
+
+  sendDeviceAlert(alert: any): void {
+    const { deviceId, severity, visibleToRoles } = alert;
+
+    // Enviar según la severidad y roles visibles
+    if (severity === "critical") {
+      // Alertas críticas van a todos los roles autorizados
+      this.broadcastToAll("alert:critical", alert);
+    } else {
+      // Alertas normales van según permisos
+      if (visibleToRoles?.includes("superadmin")) {
+        this.sendToRole("superadmin", "alert:new", alert);
+      }
+      if (visibleToRoles?.includes("empresa")) {
+        this.sendToRoom(`devices:${deviceId}`, "alert:new", alert);
+      }
+      if (visibleToRoles?.includes("cliente")) {
+        this.sendToRoom(`devices:cliente:${deviceId}`, "alert:new", alert);
+      }
+    }
+
+    logger.debug(
+      `Alerta de dispositivo enviada: ${deviceId}`,
+      "ConnectionManager",
+      {
+        severity,
+        visibleToRoles,
+      }
+    );
+  }
+
+  sendCommandResult(result: any): void {
+    const { executedBy, deviceId, userRole } = result;
+
+    // Enviar resultado al usuario que ejecutó el comando
+    this.sendToUser(executedBy, "command:result", result);
+
+    // Enviar a superadmin si no fue ejecutado por superadmin
+    if (userRole !== "superadmin") {
+      this.sendToRole("superadmin", "command:executed", result);
+    }
+
+    // Enviar a usuarios con permisos sobre el dispositivo
+    this.sendToRoom(`devices:${deviceId}`, "command:executed", result);
+
+    logger.debug(
+      `Resultado de comando enviado: ${result.commandId}`,
+      "ConnectionManager",
+      {
+        executedBy,
+        deviceId,
+      }
+    );
   }
 
   // Obtener estadísticas de conexión
@@ -231,3 +377,4 @@ export class ConnectionManager {
     return this.connectedUsers.get(userId);
   }
 }
+

@@ -1,5 +1,6 @@
 import { logger } from "../utils/logger";
 import { ConnectionManager } from "./ConnectionManager";
+import { PermissionFilter } from "./PermissionFilter";
 import {
   UserSocket,
   ArduinoCommandData,
@@ -56,24 +57,47 @@ export class HardwareEventHandler {
     socket: UserSocket,
     data: ArduinoCommandData
   ): void {
+    // Verificar permisos antes de ejecutar el comando
+    if (
+      !PermissionFilter.canExecuteCommand(socket, data.command, data.deviceId)
+    ) {
+      logger.warn(
+        `Comando ${data.command} denegado para usuario ${socket.userId}`,
+        "HardwareEventHandler"
+      );
+      socket.emit("hardware:command_denied", {
+        commandId: `cmd_${Date.now()}`,
+        reason: "Permisos insuficientes",
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
     logger.info(`Comando Arduino: ${data.command}`, "HardwareEventHandler", {
       deviceId: data.deviceId,
       target: data.target,
       userId: socket.userId,
     });
 
-    // Broadcast a dispositivos y administradores
-    this.connectionManager.sendToRole("admin", "hardware:command_sent", {
+    const commandData = {
       ...data,
       sentBy: socket.userId,
+      userRole: socket.userRole,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    // Broadcast a usuarios autorizados
+    this.connectionManager.sendToAuthorizedUsers(
+      "hardware:command_sent",
+      commandData,
+      data.deviceId
+    );
 
     // Enviar comando al dispositivo específico si está conectado
     this.connectionManager.sendToRoom(
       `device:${data.deviceId}`,
       "hardware:execute_command",
-      data
+      commandData
     );
   }
 
@@ -91,17 +115,12 @@ export class HardwareEventHandler {
       }
     );
 
-    // Broadcast resultado a administradores
-    this.connectionManager.sendToRole(
-      "admin",
-      "hardware:command_completed",
-      data
-    );
-    this.connectionManager.sendToType(
-      "empresa",
-      "hardware:command_completed",
-      data
-    );
+    // Enviar resultado usando el sistema de permisos
+    this.connectionManager.sendCommandResult({
+      ...data,
+      executedBy: socket.userId,
+      userRole: socket.userRole,
+    });
   }
 
   private handleSensorReading(
@@ -118,31 +137,67 @@ export class HardwareEventHandler {
       }
     );
 
-    // Broadcast a usuarios relevantes
-    this.connectionManager.sendToRole("admin", "hardware:sensor_update", data);
-    this.connectionManager.sendToType(
-      "empresa",
+    // Broadcast a usuarios autorizados
+    this.connectionManager.sendToAuthorizedUsers(
       "hardware:sensor_update",
-      data
+      data,
+      data.deviceId
     );
   }
 
   private handleRelayControl(socket: UserSocket, data: RelayControlData): void {
+    // Verificar permisos para control de relé
+    if (
+      !PermissionFilter.canExecuteCommand(socket, data.action, data.deviceId)
+    ) {
+      logger.warn(
+        `Control de relé ${data.action} denegado para usuario ${socket.userId}`,
+        "HardwareEventHandler"
+      );
+      socket.emit("hardware:relay_denied", {
+        relayId: data.relayId,
+        reason: "Permisos insuficientes",
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
     logger.info(`Control de relé: ${data.action}`, "HardwareEventHandler", {
       deviceId: data.deviceId,
       relayId: data.relayId,
       priority: data.priority,
     });
 
-    // Broadcast a usuarios relevantes
-    this.connectionManager.sendToRole("admin", "hardware:relay_update", data);
-    this.connectionManager.sendToType("empresa", "hardware:relay_update", data);
+    // Broadcast a usuarios autorizados
+    this.connectionManager.sendToAuthorizedUsers(
+      "hardware:relay_update",
+      {
+        ...data,
+        controlledBy: socket.userId,
+        userRole: socket.userRole,
+      },
+      data.deviceId
+    );
   }
 
   private handleDeviceConfiguration(
     socket: UserSocket,
     data: DeviceConfigurationData
   ): void {
+    // Solo superadmin puede configurar dispositivos
+    if (socket.userRole !== "superadmin") {
+      logger.warn(
+        `Configuración de dispositivo denegada para usuario ${socket.userId}`,
+        "HardwareEventHandler"
+      );
+      socket.emit("hardware:config_denied", {
+        deviceId: data.deviceId,
+        reason: "Solo superadmin puede configurar dispositivos",
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
     logger.info(
       `Configuración de dispositivo: ${data.configType}`,
       "HardwareEventHandler",
@@ -152,8 +207,11 @@ export class HardwareEventHandler {
       }
     );
 
-    // Broadcast a administradores
-    this.connectionManager.sendToRole("admin", "hardware:config_update", data);
+    // Broadcast solo a superadmin (configuraciones sensibles)
+    this.connectionManager.sendToRole("superadmin", "hardware:config_update", {
+      ...data,
+      configuredBy: socket.userId,
+    });
   }
 
   private handlePerformanceMetrics(
@@ -171,12 +229,52 @@ export class HardwareEventHandler {
       }
     );
 
-    // Broadcast a usuarios relevantes
-    this.connectionManager.sendToRole("admin", "hardware:metrics_update", data);
-    this.connectionManager.sendToType(
-      "empresa",
+    // Filtrar métricas según el rol del usuario
+    const filteredData = this.filterMetricsByRole(socket, data);
+
+    // Broadcast a usuarios autorizados
+    this.connectionManager.sendToAuthorizedUsers(
       "hardware:metrics_update",
-      data
+      filteredData,
+      data.deviceId
     );
+  }
+
+  // Filtrar métricas según el rol del usuario
+  private filterMetricsByRole(
+    socket: UserSocket,
+    data: PerformanceMetricsData
+  ): any {
+    const { userRole } = socket;
+
+    switch (userRole) {
+      case "superadmin":
+        return data; // Acceso completo a todas las métricas
+
+      case "empresa":
+        // Empresa ve métricas básicas sin detalles sensibles
+        return {
+          deviceId: data.deviceId,
+          cpuUsage: data.cpuUsage,
+          memoryUsage: data.memoryUsage,
+          temperature: data.temperature,
+          uptime: data.uptime,
+          timestamp: data.timestamp,
+          // Omitir métricas sensibles como networkLatency, errorCount
+        };
+
+      case "cliente":
+        // Cliente ve solo métricas básicas de estado
+        return {
+          deviceId: data.deviceId,
+          temperature: data.temperature,
+          uptime: data.uptime,
+          timestamp: data.timestamp,
+          status: data.cpuUsage && data.cpuUsage < 80 ? "normal" : "high_load",
+        };
+
+      default:
+        return null;
+    }
   }
 }
