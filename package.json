@@ -13,28 +13,33 @@
     "lint:fix": "eslint src --ext .ts --fix"
   },
   "dependencies": {
-    "socket.io": "^4.8.1",
-    "express": "^4.18.2",
+    "axios": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "redis": "^4.7.1",
+    "electricautomaticchile-shared-types": "file:../shared-types",
+    "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
-    "axios": "^1.6.0",
+    "redis": "^4.7.1",
+    "socket.io": "^4.8.1",
     "winston": "^3.17.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^20.10.4",
-    "typescript": "^5.3.3",
+    "@typescript-eslint/eslint-plugin": "^8.39.0",
+    "@typescript-eslint/parser": "^8.39.0",
+    "eslint": "^9.32.0",
+    "jest": "^29.7.0",
     "nodemon": "^3.0.2",
     "ts-node": "^10.9.1",
-    "eslint": "^8.57.1",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "jest": "^29.7.0",
-    "@types/jest": "^29.5.14"
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
   },
   "keywords": [
     "websocket",
