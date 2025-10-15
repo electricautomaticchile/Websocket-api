@@ -1,203 +1,87 @@
 # WebSocket API - Electric Automatic Chile
 
-API WebSocket independiente para comunicación en tiempo real entre el backend principal y el frontend.
+API de comunicación en tiempo real usando Socket.IO para notificaciones y eventos instantáneos.
 
-## 🚀 Características
+## 🎯 ¿Para qué sirve?
 
-- **Comunicación en tiempo real** con Socket.IO
-- **Autenticación JWT** integrada
-- **Gestión de salas** por usuario, rol y tipo
-- **Datos IoT en tiempo real**
-- **Sistema de notificaciones**
-- **API HTTP** para integración externa
-- **Logging avanzado** con Winston
+Este servicio maneja **toda la comunicación en tiempo real**:
+- Notificaciones instantáneas a usuarios
+- Eventos de dispositivos IoT en tiempo real
+- Alertas del sistema
+- Actualizaciones de estado en vivo
 
-## 📦 Instalación
+## 🔌 ¿Cómo se conecta con los otros proyectos?
 
+```
+Frontend (Puerto 3000)
+    ↓ WebSocket
+WebSocket API (Puerto 5000) ← Tú estás aquí
+    ↑ HTTP
+Backend API (Puerto 4000)
+```
+
+- **Frontend ↔ WebSocket**: Mantiene conexión WebSocket abierta para comunicación bidireccional
+- **Backend → WebSocket**: Envía eventos HTTP para que se transmitan a los clientes conectados
+- **WebSocket → Frontend**: Envía notificaciones y eventos en tiempo real
+
+## 🚀 Inicio Rápido
+
+### 1. Instalar dependencias
 ```bash
 npm install
 ```
 
-## 🔧 Configuración
-
-Copia `.env.local` y configura las variables:
-
-```env
-NODE_ENV=development
-PORT=5000
-JWT_SECRET=tu_jwt_secret
-MAIN_API_URL=http://localhost:4000
-FRONTEND_URL=http://localhost:3000
+### 2. Configurar variables de entorno
+```bash
+cp .env.example .env.local
+# Editar .env.local con tus valores
 ```
 
-## 🏃‍♂️ Ejecución
-
-### Desarrollo
-
+### 3. Ejecutar en desarrollo
 ```bash
 npm run dev
 ```
 
-### Producción
-
+### 4. Build para producción
 ```bash
 npm run build
 npm start
 ```
 
-## 🔌 Conexión desde Frontend
-
-```typescript
-import { io } from "socket.io-client";
-
-const socket = io("http://localhost:5000", {
-  auth: {
-    token: "tu_jwt_token",
-  },
-});
-
-// Unirse como usuario
-socket.emit("user:join", {
-  userId: "user123",
-  userRole: "admin",
-  userType: "empresa",
-});
-```
-
 ## 📡 Eventos WebSocket
 
 ### Cliente → Servidor
-
-- `user:join` - Unirse como usuario autenticado
+- `user:join` - Usuario se une con autenticación
 - `room:join` - Unirse a una sala específica
-- `room:leave` - Salir de una sala
-- `iot:data` - Enviar datos IoT
-- `iot:alert` - Enviar alerta IoT
-- `notification:send` - Enviar notificación
+- `iot:data` - Enviar datos de dispositivo IoT
 
 ### Servidor → Cliente
-
 - `connection:confirmed` - Confirmación de conexión
-- `room:joined` - Confirmación de unión a sala
-- `room:left` - Confirmación de salida de sala
+- `notification:received` - Nueva notificación
 - `iot:data:update` - Actualización de datos IoT
-- `iot:alert:new` - Nueva alerta IoT
-- `notification:received` - Notificación recibida
+- `iot:alert:new` - Nueva alerta
 
-## 🌐 API HTTP
+## 🔐 Autenticación
 
-### POST `/api/notify`
+El WebSocket API valida tokens JWT del Backend API:
+- Cada conexión debe incluir un token JWT válido
+- El `JWT_SECRET` debe ser **exactamente el mismo** que en el Backend API
 
-Enviar notificación via HTTP
+## ⚙️ Variables de Entorno Importantes
 
-```json
-{
-  "targetUserId": "user123",
-  "event": "notification:received",
-  "data": { "message": "Hola!" }
-}
-```
+| Variable | Descripción | Requerida |
+|----------|-------------|-----------|
+| `JWT_SECRET` | Secret para validar tokens (debe ser igual al Backend) | ✅ Sí |
+| `MAIN_API_URL` | URL del Backend API | ✅ Sí |
+| `FRONTEND_URL` | URL del Frontend | ✅ Sí |
+| `CORS_ORIGINS` | URLs permitidas para CORS | ✅ Sí |
 
-### GET `/api/stats`
-
-Obtener estadísticas de conexiones
-
-### GET `/api/user/:userId/status`
-
-Verificar si un usuario está conectado
-
-### POST `/api/iot/data`
-
-Recibir datos IoT de dispositivos externos
-
-### POST `/api/iot/alert`
-
-Recibir alertas IoT de dispositivos externos
-
-## 🏗️ Arquitectura
-
-```
-WebSocket API (Puerto 5000)
-├── Autenticación JWT
-├── Gestión de Salas
-│   ├── user:userId
-│   ├── role:userRole
-│   └── type:userType
-├── Eventos IoT
-├── Notificaciones
-└── API HTTP para integración
-```
-
-## 🔗 Integración con otros servicios
-
-### Backend Principal (Puerto 4000)
-
-```typescript
-// Enviar notificación desde el backend
-await fetch("http://localhost:5000/api/notify", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    targetRole: "admin",
-    event: "new:cotizacion",
-    data: { cotizacionId: "123" },
-  }),
-});
-```
-
-### Frontend (Puerto 3000)
-
-```typescript
-// Hook personalizado para WebSocket
-const { socket, isConnected } = useWebSocket({
-  url: "http://localhost:5000",
-  token: authToken,
-});
-```
-
-## 🧪 Testing
-
-### Tests Unitarios
+## 📊 Health Check
 
 ```bash
-npm test
+curl http://localhost:5000/health
 ```
 
-### Simulación IoT Eléctrica
+## 📚 Documentación Adicional
 
-```bash
-# Ejecutar simulación de dispositivos IoT
-node scripts/test-iot.js
-```
-
-La simulación incluye:
-
-- 3 dispositivos eléctricos simulados
-- Lecturas de voltaje, corriente y potencia en tiempo real
-- Anomalías ocasionales (sobrevoltaje, sobrecorriente)
-- Desconexiones y reconexiones automáticas
-- Alertas críticas simuladas
-
-### Simulación Control Hardware
-
-```bash
-# Ejecutar simulación de control hardware
-node scripts/test-hardware.js
-```
-
-La simulación incluye:
-
-- 3 dispositivos hardware (Arduino, controladores)
-- Control de LEDs y relés en tiempo real
-- Lecturas de sensores (temperatura, humedad, presión)
-- Métricas de performance (CPU, memoria, temperatura)
-- Secuencias automáticas de comandos
-- Simulación de emergencias
-
-## 📝 Logs
-
-Los logs se guardan en:
-
-- Consola (desarrollo)
-- `logs/websocket-error.log` (errores en producción)
-- `logs/websocket-combined.log` (todos los logs en producción)
+Ver carpeta `docs/` para documentación detallada.
