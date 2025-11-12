@@ -46,3 +46,21 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Docker (no longer used)
+Dockerfile*
+docker-compose*
+compose.yaml*
+.dockerignore
+
+# Bun (using npm instead)
+bun.lock*
+.bun
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Tool version files (keeping only .nvmrc)
+.tool-versions

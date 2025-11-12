@@ -1,6 +1,5 @@
 import { logger } from "../utils/logger";
 import { ConnectionManager } from "./ConnectionManager";
-import { PredictiveAnalytics, DataPoint } from "./PredictiveAnalytics";
 import { PermissionFilter } from "./PermissionFilter";
 import {
   UserSocket,
@@ -19,14 +18,9 @@ import {
 
 export class IoTEventHandler {
   private connectionManager: ConnectionManager;
-  private predictiveAnalytics: PredictiveAnalytics;
 
-  constructor(
-    connectionManager: ConnectionManager,
-    predictiveAnalytics: PredictiveAnalytics
-  ) {
+  constructor(connectionManager: ConnectionManager) {
     this.connectionManager = connectionManager;
-    this.predictiveAnalytics = predictiveAnalytics;
   }
 
   // Configurar event handlers para un socket
@@ -129,15 +123,6 @@ export class IoTEventHandler {
       quality: data.quality,
     });
 
-    // Agregar a análisis predictivo
-    const dataPoint: DataPoint = {
-      deviceId: data.deviceId,
-      timestamp: data.timestamp,
-      type: "voltage",
-      value: data.voltage,
-    };
-    this.predictiveAnalytics.addDataPoint(dataPoint);
-
     // Verificar umbrales
     this.checkVoltageThresholds(data, socket.userId);
 
@@ -159,15 +144,6 @@ export class IoTEventHandler {
       powerFactor: data.powerFactor,
     });
 
-    // Agregar a análisis predictivo
-    const dataPoint: DataPoint = {
-      deviceId: data.deviceId,
-      timestamp: data.timestamp,
-      type: "current",
-      value: data.current,
-    };
-    this.predictiveAnalytics.addDataPoint(dataPoint);
-
     // Verificar umbrales
     this.checkCurrentThresholds(data, socket.userId);
 
@@ -188,15 +164,6 @@ export class IoTEventHandler {
       activePower: data.activePower,
       energy: data.energy,
     });
-
-    // Agregar a análisis predictivo
-    const dataPoint: DataPoint = {
-      deviceId: data.deviceId,
-      timestamp: data.timestamp,
-      type: "power",
-      value: data.activePower,
-    };
-    this.predictiveAnalytics.addDataPoint(dataPoint);
 
     // Verificar umbrales de potencia
     this.checkPowerThresholds(data, socket.userId);
