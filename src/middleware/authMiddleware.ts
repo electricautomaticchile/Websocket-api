@@ -35,10 +35,33 @@ export class AuthMiddleware {
 
       const decoded = jwt.verify(token, jwtSecret) as any;
 
-      // Asignar datos del usuario al socket
-      socket.userId = decoded.userId || decoded.sub;
-      socket.userRole = decoded.role;
-      socket.userType = decoded.tipoUsuario;
+      // Asignar datos del usuario al socket Y al handshake.auth
+      const userId = decoded.userId || decoded.sub;
+      const userRole = decoded.role;
+      const userType = decoded.type || decoded.tipoUsuario;
+
+      socket.userId = userId;
+      socket.userRole = userRole;
+      socket.userType = userType;
+
+      // IMPORTANTE: También asignar al handshake.auth para que ConnectionManager pueda acceder
+      socket.handshake.auth.userId = userId;
+      socket.handshake.auth.userRole = userRole;
+      socket.handshake.auth.userType = userType;
+
+      console.log(
+        `✅ [AuthMiddleware] WebSocket autenticado:`,
+        JSON.stringify(
+          {
+            socketId: socket.id,
+            userId,
+            userRole,
+            userType,
+          },
+          null,
+          2
+        )
+      );
 
       logger.info(
         `✅ WebSocket autenticado: ${socket.userId} (${socket.userRole}/${socket.userType})`
@@ -89,4 +112,3 @@ export class AuthMiddleware {
     };
   };
 }
-

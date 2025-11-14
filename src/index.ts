@@ -7,6 +7,7 @@ import { logger } from "./utils/logger";
 import { WebSocketManager } from "./services/WebSocketManager";
 import { AuthMiddleware } from "./middleware/authMiddleware";
 import { setupRoutes } from "./routes";
+import { ArduinoSerialBridge } from "./services/ArduinoSerialBridge";
 
 // Cargar variables de entorno
 dotenv.config({ path: ".env.local" });
@@ -45,6 +46,34 @@ const io = new SocketIOServer(server, {
 const wsManager = new WebSocketManager(io);
 const authMiddleware = new AuthMiddleware();
 
+// Inicializar puente serial Arduino
+const arduinoSerial = new ArduinoSerialBridge(wsManager);
+
+// Conectar Arduino automáticamente si está habilitado
+if (process.env.ARDUINO_SERIAL_ENABLED === "true") {
+  setTimeout(async () => {
+    try {
+      await arduinoSerial.listPorts();
+      await arduinoSerial.connect();
+      logger.info("✅ Arduino Serial Bridge iniciado", "Main");
+    } catch (error) {
+      logger.warn(
+        "⚠️ No se pudo conectar al Arduino. El servidor continuará funcionando sin él.",
+        "Main"
+      );
+      logger.info(
+        "💡 Para conectar Arduino: 1) Conecta el Arduino por USB, 2) Reinicia el servidor",
+        "Main"
+      );
+    }
+  }, 2000); // Esperar 2 segundos después de iniciar el servidor
+} else {
+  logger.info(
+    "ℹ️ Arduino Serial deshabilitado. Para habilitarlo: ARDUINO_SERIAL_ENABLED=true",
+    "Main"
+  );
+}
+
 // Middleware de autenticación para WebSocket
 io.use(authMiddleware.authenticate);
 
@@ -81,4 +110,4 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 // Exportar tanto io como wsManager para uso externo
-export { io, wsManager };
+export { io, wsManager, arduinoSerial };

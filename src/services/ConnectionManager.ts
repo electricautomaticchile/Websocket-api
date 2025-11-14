@@ -71,9 +71,28 @@ export class ConnectionManager {
   private async joinAutomaticRooms(socket: UserSocket): Promise<void> {
     const { userId, userRole, userType } = socket;
 
+    console.log(
+      `🏠 [ConnectionManager] Uniendo a salas automáticas:`,
+      JSON.stringify(
+        {
+          socketId: socket.id,
+          userId,
+          userRole,
+          userType,
+        },
+        null,
+        2
+      )
+    );
+
     // Sala personal del usuario
     if (userId) {
+      console.log(`🏠 [ConnectionManager] Uniendo a sala: user:${userId}`);
       this.joinRoom(socket, `user:${userId}`);
+    } else {
+      console.log(
+        `⚠️ [ConnectionManager] No hay userId, no se puede unir a sala personal`
+      );
     }
 
     // Sala por rol
@@ -377,4 +396,3 @@ export class ConnectionManager {
     return this.connectedUsers.get(userId);
   }
 }
-
