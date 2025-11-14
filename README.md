@@ -1,87 +1,91 @@
-# WebSocket API - Electric Automatic Chile
+# Electric Automatic Chile - WebSocket API
 
-API de comunicación en tiempo real usando Socket.IO para notificaciones y eventos instantáneos.
+Servidor WebSocket para comunicación en tiempo real entre dispositivos Arduino y clientes web.
 
-## 🎯 ¿Para qué sirve?
+## 🚀 ¿Qué hace este proyecto?
 
-Este servicio maneja **toda la comunicación en tiempo real**:
-- Notificaciones instantáneas a usuarios
-- Eventos de dispositivos IoT en tiempo real
-- Alertas del sistema
-- Actualizaciones de estado en vivo
+Servidor WebSocket desarrollado con Socket.IO que proporciona:
 
-## 🔌 ¿Cómo se conecta con los otros proyectos?
+- **Comunicación Serial con Arduino**: Lee datos del puerto USB en tiempo real
+- **Bridge Arduino → WebSocket**: Convierte datos seriales a eventos WebSocket
+- **Salas por Usuario**: Cada cliente recibe solo sus datos
+- **Autenticación JWT**: Conexiones seguras con validación de tokens
+- **Registro Automático de Dispositivos**: Crea dispositivos nuevos automáticamente
+- **Actualización en Tiempo Real**: Envía datos de consumo cada 5 segundos
 
-```
-Frontend (Puerto 3000)
-    ↓ WebSocket
-WebSocket API (Puerto 5000) ← Tú estás aquí
-    ↑ HTTP
-Backend API (Puerto 4000)
-```
+## 🛠️ Tecnologías
 
-- **Frontend ↔ WebSocket**: Mantiene conexión WebSocket abierta para comunicación bidireccional
-- **Backend → WebSocket**: Envía eventos HTTP para que se transmitan a los clientes conectados
-- **WebSocket → Frontend**: Envía notificaciones y eventos en tiempo real
+- **Node.js + Express** - Framework backend
+- **Socket.IO** - WebSocket bidireccional
+- **TypeScript** - Tipado estático
+- **SerialPort** - Comunicación con Arduino
+- **Axios** - Cliente HTTP para API REST
+- **Winston** - Logging
 
-## 🚀 Inicio Rápido
+## 📦 Instalación
 
-### 1. Instalar dependencias
 ```bash
 npm install
 ```
 
-### 2. Configurar variables de entorno
-```bash
-cp .env.example .env.local
-# Editar .env.local con tus valores
+## 🔧 Configuración
+
+Crea un archivo `.env` con las siguientes variables:
+
+```env
+PORT=5000
+API_URL=http://localhost:4000/api
+JWT_SECRET=tu_secret_key_aqui
+NODE_ENV=development
+SERIAL_PORT=/dev/ttyUSB0
+BAUD_RATE=9600
 ```
 
-### 3. Ejecutar en desarrollo
+## 🚀 Desarrollo
+
 ```bash
 npm run dev
 ```
 
-### 4. Build para producción
-```bash
-npm run build
-npm start
+El servidor WebSocket estará disponible en `http://localhost:5000`
+
+## 🔌 Conexión Arduino
+
+El Arduino debe enviar datos en formato JSON por el puerto serial:
+
+```json
+{
+  "type": "data",
+  "deviceId": "629903-3",
+  "clienteId": "688e5ee1233c78b3e47c7155",
+  "voltage": 220,
+  "current": 0.5,
+  "activePower": 110,
+  "energy": 0.055,
+  "cost": 8.25,
+  "uptime": 3600,
+  "led1": true,
+  "led2": false
+}
 ```
 
 ## 📡 Eventos WebSocket
 
 ### Cliente → Servidor
-- `user:join` - Usuario se une con autenticación
-- `room:join` - Unirse a una sala específica
-- `iot:data` - Enviar datos de dispositivo IoT
+
+- `authenticate` - Autenticación con JWT
 
 ### Servidor → Cliente
+
 - `connection:confirmed` - Confirmación de conexión
-- `notification:received` - Nueva notificación
-- `iot:data:update` - Actualización de datos IoT
-- `iot:alert:new` - Nueva alerta
+- `room:joined` - Confirmación de unión a sala
+- `dispositivo:actualizacion_potencia` - Datos de consumo en tiempo real
 
-## 🔐 Autenticación
+## 📚 Documentación Detallada
 
-El WebSocket API valida tokens JWT del Backend API:
-- Cada conexión debe incluir un token JWT válido
-- El `JWT_SECRET` debe ser **exactamente el mismo** que en el Backend API
+Para más información sobre deployment, configuración de Arduino y troubleshooting, consulta la carpeta [`docs/`](./docs/)
 
-## ⚙️ Variables de Entorno Importantes
+## 🔗 Proyectos Relacionados
 
-| Variable | Descripción | Requerida |
-|----------|-------------|-----------|
-| `JWT_SECRET` | Secret para validar tokens (debe ser igual al Backend) | ✅ Sí |
-| `MAIN_API_URL` | URL del Backend API | ✅ Sí |
-| `FRONTEND_URL` | URL del Frontend | ✅ Sí |
-| `CORS_ORIGINS` | URLs permitidas para CORS | ✅ Sí |
-
-## 📊 Health Check
-
-```bash
-curl http://localhost:5000/health
-```
-
-## 📚 Documentación Adicional
-
-Ver carpeta `docs/` para documentación detallada.
+- [Frontend](../electricautomaticchile/)
+- [API Backend](../api-electricautomaticchile/)
