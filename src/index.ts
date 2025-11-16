@@ -49,6 +49,10 @@ const authMiddleware = new AuthMiddleware();
 // Inicializar puente serial Arduino
 const arduinoSerial = new ArduinoSerialBridge(wsManager);
 
+// Inyectar arduinoBridge en las rutas
+import { setArduinoBridge } from "./routes/arduinoRoutes";
+setArduinoBridge(arduinoSerial);
+
 // Conectar Arduino automáticamente si está habilitado
 if (process.env.ARDUINO_SERIAL_ENABLED === "true") {
   setTimeout(async () => {

@@ -24,6 +24,13 @@ export class ArduinoSerialBridge {
   private apiUrl: string;
   private wsManager: any;
   private deviceRegistry: Map<string, any> = new Map();
+  private reconnectInterval: NodeJS.Timeout | null = null;
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 10;
+  private reconnectDelay: number = 5000; // 5 segundos
+  private lastConnectedPort: string | null = null;
+  private isReconnecting: boolean = false;
+  private restoredDevices: Set<string> = new Set(); // Dispositivos ya restaurados en esta sesión
 
   constructor(wsManager: any) {
     this.wsManager = wsManager;
@@ -63,6 +70,9 @@ export class ArduinoSerialBridge {
         "ArduinoSerialBridge"
       );
 
+      // Guardar el puerto para reconexión
+      this.lastConnectedPort = portPath;
+
       this.port = new SerialPort({
         path: portPath,
         baudRate: 115200,
@@ -71,19 +81,65 @@ export class ArduinoSerialBridge {
       this.parser = this.port.pipe(new ReadlineParser({ delimiter: "\n" }));
 
       // Eventos del puerto serial
-      this.port.on("open", () => {
+      this.port.on("open", async () => {
         logger.info(
           `✅ Conectado a Arduino en ${portPath}`,
           "ArduinoSerialBridge"
         );
+        // Resetear contador de reconexión al conectar exitosamente
+        this.reconnectAttempts = 0;
+        this.isReconnecting = false;
+        // Limpiar intervalo de reconexión si existe
+        if (this.reconnectInterval) {
+          clearTimeout(this.reconnectInterval);
+          this.reconnectInterval = null;
+        }
+        
+        // Esperar 3 segundos para que Arduino inicialice y luego restaurar todos los dispositivos conocidos
+        setTimeout(async () => {
+          logger.info(
+            `🔄 Restaurando estado de dispositivos conocidos...`,
+            "ArduinoSerialBridge"
+          );
+          
+          // Restaurar todos los dispositivos que tenemos registrados
+          for (const [deviceId, device] of this.deviceRegistry.entries()) {
+            if (!this.restoredDevices.has(deviceId)) {
+              logger.info(
+                `🔄 Restaurando ${deviceId} al conectar puerto...`,
+                "ArduinoSerialBridge"
+              );
+              this.restoredDevices.add(deviceId);
+              await this.restoreDeviceState(deviceId);
+            }
+          }
+        }, 3000); // 3 segundos para que Arduino esté listo
       });
 
       this.port.on("error", (err) => {
-        logger.error(`Error en puerto serial: ${err.message}`, err);
+        logger.error(`❌ Error en puerto serial: ${err.message}`, err);
+        // Limpiar puerto
+        this.port = null;
+        this.parser = null;
+        // Intentar reconectar en caso de error
+        this.scheduleReconnect();
       });
 
-      this.port.on("close", () => {
-        logger.warn("Puerto serial cerrado", "ArduinoSerialBridge");
+      this.port.on("close", async () => {
+        logger.warn("⚠️ Puerto serial cerrado - Arduino desconectado", "ArduinoSerialBridge");
+        
+        // Guardar última lectura de todos los dispositivos antes de desconectar
+        await this.saveAllDevicesState();
+        
+        // Limpiar el set de dispositivos restaurados para que se restauren al reconectar
+        this.restoredDevices.clear();
+        logger.info("🔄 Set de dispositivos restaurados limpiado", "ArduinoSerialBridge");
+        
+        // Limpiar puerto
+        this.port = null;
+        this.parser = null;
+        // Intentar reconectar automáticamente
+        this.scheduleReconnect();
       });
 
       // Procesar datos recibidos
@@ -91,7 +147,10 @@ export class ArduinoSerialBridge {
         this.processArduinoData(line);
       });
     } catch (error) {
-      logger.error("Error conectando a Arduino:", error);
+      logger.error("❌ Error conectando a Arduino:", error);
+      // Limpiar puerto en caso de error
+      this.port = null;
+      this.parser = null;
       throw error;
     }
   }
@@ -203,6 +262,23 @@ export class ArduinoSerialBridge {
       // Registrar dispositivo si es nuevo
       if (!this.deviceRegistry.has(data.deviceId)) {
         await this.registerDevice(data);
+        
+        // Si es un dispositivo nuevo que no conocíamos, restaurar su estado
+        if (!this.restoredDevices.has(data.deviceId)) {
+          logger.info(
+            `🔄 Dispositivo nuevo ${data.deviceId}, restaurando estado...`,
+            "ArduinoSerialBridge"
+          );
+          this.restoredDevices.add(data.deviceId);
+          await this.restoreDeviceState(data.deviceId);
+        }
+      }
+
+      // Actualizar última lectura en el registro
+      const device = this.deviceRegistry.get(data.deviceId);
+      if (device) {
+        device.lastReading = data;
+        this.deviceRegistry.set(data.deviceId, device);
       }
 
       // Enviar datos al WebSocket
@@ -381,36 +457,169 @@ export class ArduinoSerialBridge {
   // Guardar en base de datos (opcional - para histórico)
   private async saveToDatabase(data: ArduinoData): Promise<void> {
     try {
-      // Aquí podrías guardar los datos en una colección de lecturas
-      // Por ahora solo actualizamos la última lectura del dispositivo
-      await axios.put(
+      // Guardar última lectura del dispositivo con energía y costo acumulado
+      const payload = {
+        voltaje: data.voltage,
+        corriente: data.current,
+        potencia: data.activePower,
+        energia: data.energy,
+        costo: data.cost,
+        timestamp: new Date(),
+      };
+      
+      logger.info(
+        `💾 Guardando en BD para ${data.deviceId}:`,
+        "ArduinoSerialBridge",
+        payload
+      );
+      
+      const response = await axios.put(
         `${this.apiUrl}/dispositivos/numero/${data.deviceId}/ultima-lectura`,
-        {
-          voltaje: data.voltage,
-          corriente: data.current,
-          potencia: data.activePower,
-          energia: data.energy,
-          timestamp: new Date(),
+        payload
+      );
+      
+      logger.info(
+        `✅ Guardado exitoso en BD para ${data.deviceId}`,
+        "ArduinoSerialBridge"
+      );
+    } catch (error: any) {
+      logger.error(
+        `❌ Error guardando en base de datos para ${data.deviceId}:`,
+        error.response?.data || error.message
+      );
+    }
+  }
+
+  // Guardar estado de todos los dispositivos registrados
+  private async saveAllDevicesState(): Promise<void> {
+    try {
+      logger.info(
+        `💾 Guardando estado de ${this.deviceRegistry.size} dispositivo(s)...`,
+        "ArduinoSerialBridge"
+      );
+
+      const savePromises = Array.from(this.deviceRegistry.entries()).map(
+        async ([deviceId, device]) => {
+          try {
+            // Obtener última lectura conocida del dispositivo
+            const lastData = device.lastReading;
+            
+            logger.info(
+              `📋 Última lectura de ${deviceId}:`,
+              "ArduinoSerialBridge",
+              {
+                hasData: !!lastData,
+                energy: lastData?.energy,
+                cost: lastData?.cost,
+                voltage: lastData?.voltage,
+                power: lastData?.activePower
+              }
+            );
+            
+            if (lastData) {
+              const payload = {
+                voltaje: lastData.voltage || 0,
+                corriente: lastData.current || 0,
+                potencia: lastData.activePower || 0,
+                energia: lastData.energy || 0,
+                costo: lastData.cost || 0,
+                timestamp: new Date(),
+              };
+              
+              logger.info(
+                `📤 Guardando en BD para ${deviceId}:`,
+                "ArduinoSerialBridge",
+                payload
+              );
+              
+              await axios.put(
+                `${this.apiUrl}/dispositivos/numero/${deviceId}/ultima-lectura`,
+                payload
+              );
+              
+              logger.info(
+                `✅ Estado guardado para dispositivo ${deviceId}`,
+                "ArduinoSerialBridge"
+              );
+            } else {
+              logger.warn(
+                `⚠️ No hay última lectura para ${deviceId}`,
+                "ArduinoSerialBridge"
+              );
+            }
+          } catch (error: any) {
+            logger.error(
+              `❌ Error guardando estado del dispositivo ${deviceId}:`,
+              error.response?.data || error.message
+            );
+          }
         }
       );
+
+      await Promise.all(savePromises);
+      logger.info(
+        `✅ Estado de dispositivos guardado exitosamente`,
+        "ArduinoSerialBridge"
+      );
     } catch (error) {
-      // No es crítico si falla
-      logger.debug("Error guardando en base de datos:", error);
+      logger.error("Error guardando estado de dispositivos:", error);
+    }
+  }
+
+  // Restaurar estado de un dispositivo al reconectar
+  private async restoreDeviceState(deviceId: string): Promise<void> {
+    try {
+      logger.info(
+        `🔄 Restaurando estado del dispositivo ${deviceId}...`,
+        "ArduinoSerialBridge"
+      );
+
+      // Obtener última lectura de la base de datos
+      const response = await axios.get(
+        `${this.apiUrl}/dispositivos/numero/${deviceId}`
+      );
+
+      if (response.data.success && response.data.data) {
+        const dispositivo = response.data.data;
+        const ultimaLectura = dispositivo.ultimaLectura;
+
+        if (ultimaLectura && ultimaLectura.energia) {
+          // Enviar comando al Arduino para restaurar valores
+          const comando = `RESTORE:${ultimaLectura.energia}:${ultimaLectura.costo || 0}`;
+          this.sendCommand(comando);
+
+          logger.info(
+            `✅ Estado restaurado para ${deviceId}: Energía=${ultimaLectura.energia} kWh, Costo=$${ultimaLectura.costo}`,
+            "ArduinoSerialBridge"
+          );
+        } else {
+          logger.info(
+            `ℹ️ No hay estado previo para ${deviceId}, iniciando desde cero`,
+            "ArduinoSerialBridge"
+          );
+        }
+      }
+    } catch (error) {
+      logger.warn(
+        `⚠️ No se pudo restaurar estado del dispositivo ${deviceId}`,
+        "ArduinoSerialBridge"
+      );
     }
   }
 
   // Enviar comando al Arduino
   sendCommand(command: string): void {
     if (this.port && this.port.isOpen) {
+      logger.info(`📤 Enviando comando al Arduino: ${command}`, "ArduinoSerialBridge");
       this.port.write(`${command}\n`, (err) => {
         if (err) {
-          logger.error(`Error enviando comando: ${err.message}`, err);
+          logger.error(`❌ Error enviando comando: ${err.message}`, err);
         } else {
-          logger.info(`Comando enviado: ${command}`, "ArduinoSerialBridge");
+          logger.info(`✅ Comando enviado exitosamente: ${command}`, "ArduinoSerialBridge");
         }
       });
     } else {
-      logger.warn("Puerto serial no está abierto", "ArduinoSerialBridge");
+      logger.warn("⚠️ Puerto serial no está abierto, no se puede enviar comando", "ArduinoSerialBridge");
     }
   }
 
@@ -435,5 +644,132 @@ export class ArduinoSerialBridge {
   // Obtener dispositivos registrados
   getRegisteredDevices(): any[] {
     return Array.from(this.deviceRegistry.values());
+  }
+
+  // Programar reconexión
+  private scheduleReconnect(): void {
+    // Evitar múltiples intentos de reconexión simultáneos
+    if (this.isReconnecting || this.reconnectInterval) {
+      return;
+    }
+
+    // Verificar si hemos excedido el máximo de intentos
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      logger.error(
+        `❌ Máximo de intentos de reconexión alcanzado (${this.maxReconnectAttempts}). Deteniendo intentos.`,
+        "ArduinoSerialBridge"
+      );
+      logger.info(
+        "💡 Para reconectar: 1) Verifica que el Arduino esté conectado, 2) Reinicia el servidor",
+        "ArduinoSerialBridge"
+      );
+      return;
+    }
+
+    this.isReconnecting = true;
+    this.reconnectAttempts++;
+
+    logger.info(
+      `🔄 Programando reconexión (intento ${this.reconnectAttempts}/${this.maxReconnectAttempts}) en ${this.reconnectDelay / 1000} segundos...`,
+      "ArduinoSerialBridge"
+    );
+
+    this.reconnectInterval = setTimeout(() => {
+      this.attemptReconnect();
+    }, this.reconnectDelay);
+  }
+
+  // Intentar reconectar
+  private async attemptReconnect(): Promise<void> {
+    try {
+      logger.info(
+        `🔌 Intentando reconectar al Arduino (intento ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`,
+        "ArduinoSerialBridge"
+      );
+
+      // Limpiar puerto anterior si existe
+      if (this.port) {
+        try {
+          if (this.port.isOpen) {
+            this.port.close();
+          }
+        } catch (error) {
+          // Ignorar errores al cerrar
+        }
+        this.port = null;
+        this.parser = null;
+      }
+
+      // Limpiar intervalo
+      if (this.reconnectInterval) {
+        clearTimeout(this.reconnectInterval);
+        this.reconnectInterval = null;
+      }
+
+      // SIEMPRE buscar el puerto nuevamente (no confiar en el último puerto)
+      logger.info("🔍 Buscando Arduino en puertos disponibles...", "ArduinoSerialBridge");
+      const portToUse = await this.findArduinoPort();
+
+      if (!portToUse) {
+        logger.warn(
+          `⚠️ No se encontró Arduino conectado. Reintentando en ${this.reconnectDelay / 1000} segundos...`,
+          "ArduinoSerialBridge"
+        );
+        this.isReconnecting = false;
+        this.scheduleReconnect();
+        return;
+      }
+
+      // Verificar que el puerto existe antes de intentar conectar
+      const ports = await SerialPort.list();
+      const portExists = ports.some(p => p.path === portToUse);
+      
+      if (!portExists) {
+        logger.warn(
+          `⚠️ Puerto ${portToUse} no está disponible. Reintentando...`,
+          "ArduinoSerialBridge"
+        );
+        this.isReconnecting = false;
+        this.scheduleReconnect();
+        return;
+      }
+
+      // Intentar conectar
+      await this.connect(portToUse);
+
+      logger.info(
+        `✅ Reconexión exitosa al Arduino en ${portToUse}`,
+        "ArduinoSerialBridge"
+      );
+    } catch (error) {
+      logger.error(
+        `❌ Error en reconexión (intento ${this.reconnectAttempts}/${this.maxReconnectAttempts}):`,
+        error
+      );
+      this.isReconnecting = false;
+      this.scheduleReconnect();
+    }
+  }
+
+  // Resetear contador de reconexión (útil para llamar manualmente)
+  resetReconnectAttempts(): void {
+    this.reconnectAttempts = 0;
+    logger.info(
+      "🔄 Contador de reconexión reseteado",
+      "ArduinoSerialBridge"
+    );
+  }
+
+  // Obtener estado de reconexión
+  getReconnectStatus(): {
+    isReconnecting: boolean;
+    attempts: number;
+    maxAttempts: number;
+  } {
+    return {
+      isReconnecting: this.isReconnecting,
+      attempts: this.reconnectAttempts,
+      maxAttempts: this.maxReconnectAttempts,
+    };
   }
 }

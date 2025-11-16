@@ -1,8 +1,12 @@
 import { Express } from "express";
 import { WebSocketManager } from "../services/WebSocketManager";
 import { logger } from "../utils/logger";
+import arduinoRoutes from "./arduinoRoutes";
 
 export function setupRoutes(app: Express, wsManager: WebSocketManager) {
+  // Registrar rutas de Arduino
+  app.use("/api/arduino", arduinoRoutes);
+  
   // Ruta para enviar notificaciones via HTTP (para integración con API principal)
   app.post("/api/notify", (req, res): any => {
     try {
