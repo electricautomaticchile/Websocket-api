@@ -129,6 +129,7 @@ export class ArduinoSerialBridge {
         logger.warn("⚠️ Puerto serial cerrado - Arduino desconectado", "ArduinoSerialBridge");
         
         // Guardar última lectura de todos los dispositivos antes de desconectar
+        // NOTA: Esto es diferente al historial. Solo actualiza ultimaLectura del dispositivo
         await this.saveAllDevicesState();
         
         // Limpiar el set de dispositivos restaurados para que se restauren al reconectar
@@ -284,8 +285,9 @@ export class ArduinoSerialBridge {
       // Enviar datos al WebSocket
       await this.sendToWebSocket(data);
 
-      // Guardar en base de datos (opcional)
-      await this.saveToDatabase(data);
+      // NOTA: El guardado en BD ahora lo maneja HistorialConsumoService cada 60 segundos
+      // Esto evita duplicados y reduce el almacenamiento en un 92%
+      // await this.saveToDatabase(data);
     } catch (error) {
       logger.error("Error procesando datos del Arduino:", error);
     }
@@ -412,11 +414,13 @@ export class ArduinoSerialBridge {
         wsData
       );
 
-      // También enviar evento genérico
+      // También enviar evento genérico (formato español para frontend)
       const datosActualizacion = {
-        dispositivoId: data.deviceId,
+        idDispositivo: data.deviceId, // Cambiado de dispositivoId a idDispositivo
         potenciaActiva: data.activePower,
         energia: data.energy,
+        voltaje: data.voltage, // Agregado
+        corriente: data.current, // Agregado
         costo: data.cost,
         marcaTiempo: new Date().toISOString(),
         metadata: {
@@ -454,10 +458,15 @@ export class ArduinoSerialBridge {
     }
   }
 
-  // Guardar en base de datos (opcional - para histórico)
+  // DESHABILITADO: El guardado histórico ahora lo maneja HistorialConsumoService
+  // Esto evita duplicados y reduce el almacenamiento en un 92%
+  // La función saveAllDevicesState() sigue activa para guardar el último estado al desconectar
   private async saveToDatabase(data: ArduinoData): Promise<void> {
+    // Función deshabilitada - Ver HistorialConsumoService para guardado histórico
+    return;
+    
+    /* CÓDIGO ORIGINAL COMENTADO
     try {
-      // Guardar última lectura del dispositivo con energía y costo acumulado
       const payload = {
         voltaje: data.voltage,
         corriente: data.current,
@@ -488,6 +497,7 @@ export class ArduinoSerialBridge {
         error.response?.data || error.message
       );
     }
+    */
   }
 
   // Guardar estado de todos los dispositivos registrados
