@@ -65,7 +65,7 @@ export class HardwareEventHandler {
         `Comando ${data.command} denegado para usuario ${socket.userId}`,
         "HardwareEventHandler"
       );
-      socket.emit("hardware:command_denied", {
+      socket.emit("hardware:comando_denegado", {
         commandId: `cmd_${Date.now()}`,
         reason: "Permisos insuficientes",
         timestamp: new Date().toISOString(),
@@ -88,7 +88,7 @@ export class HardwareEventHandler {
 
     // Broadcast a usuarios autorizados
     this.connectionManager.sendToAuthorizedUsers(
-      "hardware:command_sent",
+      "hardware:comando_enviado",
       commandData,
       data.deviceId
     );
@@ -139,7 +139,7 @@ export class HardwareEventHandler {
 
     // Broadcast a usuarios autorizados
     this.connectionManager.sendToAuthorizedUsers(
-      "hardware:sensor_update",
+      "hardware:actualizacion_sensor",
       data,
       data.deviceId
     );
@@ -154,7 +154,7 @@ export class HardwareEventHandler {
         `Control de relé ${data.action} denegado para usuario ${socket.userId}`,
         "HardwareEventHandler"
       );
-      socket.emit("hardware:relay_denied", {
+      socket.emit("hardware:rele_denegado", {
         relayId: data.relayId,
         reason: "Permisos insuficientes",
         timestamp: new Date().toISOString(),
@@ -170,7 +170,7 @@ export class HardwareEventHandler {
 
     // Broadcast a usuarios autorizados
     this.connectionManager.sendToAuthorizedUsers(
-      "hardware:relay_update",
+      "hardware:actualizacion_rele",
       {
         ...data,
         controlledBy: socket.userId,
@@ -190,7 +190,7 @@ export class HardwareEventHandler {
         `Configuración de dispositivo denegada para usuario ${socket.userId}`,
         "HardwareEventHandler"
       );
-      socket.emit("hardware:config_denied", {
+      socket.emit("hardware:config_denegada", {
         deviceId: data.deviceId,
         reason: "Solo superadmin puede configurar dispositivos",
         timestamp: new Date().toISOString(),
@@ -208,7 +208,7 @@ export class HardwareEventHandler {
     );
 
     // Broadcast solo a superadmin (configuraciones sensibles)
-    this.connectionManager.sendToRole("superadmin", "hardware:config_update", {
+    this.connectionManager.sendToRole("superadmin", "hardware:actualizacion_config", {
       ...data,
       configuredBy: socket.userId,
     });
@@ -234,7 +234,7 @@ export class HardwareEventHandler {
 
     // Broadcast a usuarios autorizados
     this.connectionManager.sendToAuthorizedUsers(
-      "hardware:metrics_update",
+      "hardware:actualizacion_metricas",
       filteredData,
       data.deviceId
     );

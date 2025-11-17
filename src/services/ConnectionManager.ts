@@ -294,17 +294,17 @@ export class ConnectionManager {
     // Enviar según la severidad y roles visibles
     if (severity === "critical") {
       // Alertas críticas van a todos los roles autorizados
-      this.broadcastToAll("alert:critical", alert);
+      this.broadcastToAll("iot:alerta:critica", alert);
     } else {
       // Alertas normales van según permisos
       if (visibleToRoles?.includes("superadmin")) {
-        this.sendToRole("superadmin", "alert:new", alert);
+        this.sendToRole("superadmin", "iot:alerta:nueva", alert);
       }
       if (visibleToRoles?.includes("empresa")) {
-        this.sendToRoom(`devices:${deviceId}`, "alert:new", alert);
+        this.sendToRoom(`devices:${deviceId}`, "iot:alerta:nueva", alert);
       }
       if (visibleToRoles?.includes("cliente")) {
-        this.sendToRoom(`devices:cliente:${deviceId}`, "alert:new", alert);
+        this.sendToRoom(`devices:cliente:${deviceId}`, "iot:alerta:nueva", alert);
       }
     }
 
@@ -322,15 +322,15 @@ export class ConnectionManager {
     const { executedBy, deviceId, userRole } = result;
 
     // Enviar resultado al usuario que ejecutó el comando
-    this.sendToUser(executedBy, "command:result", result);
+    this.sendToUser(executedBy, "hardware:resultado_comando", result);
 
     // Enviar a superadmin si no fue ejecutado por superadmin
     if (userRole !== "superadmin") {
-      this.sendToRole("superadmin", "command:executed", result);
+      this.sendToRole("superadmin", "hardware:comando_ejecutado", result);
     }
 
     // Enviar a usuarios con permisos sobre el dispositivo
-    this.sendToRoom(`devices:${deviceId}`, "command:executed", result);
+    this.sendToRoom(`devices:${deviceId}`, "hardware:comando_ejecutado", result);
 
     logger.debug(
       `Resultado de comando enviado: ${result.commandId}`,

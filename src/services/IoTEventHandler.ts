@@ -91,7 +91,7 @@ export class IoTEventHandler {
 
     // Broadcast a usuarios autorizados con filtrado por permisos
     this.connectionManager.sendToAuthorizedUsers(
-      "device:status_update",
+      "dispositivo:actualizacion_conexion",
       {
         ...data,
         timestamp: new Date().toISOString(),
@@ -128,7 +128,7 @@ export class IoTEventHandler {
 
     // Broadcast a usuarios autorizados
     this.connectionManager.sendToAuthorizedUsers(
-      "iot:voltage_update",
+      "dispositivo:actualizacion_voltaje",
       data,
       data.deviceId
     );
@@ -149,7 +149,7 @@ export class IoTEventHandler {
 
     // Broadcast a usuarios autorizados
     this.connectionManager.sendToAuthorizedUsers(
-      "iot:current_update",
+      "dispositivo:actualizacion_corriente",
       data,
       data.deviceId
     );
@@ -170,7 +170,7 @@ export class IoTEventHandler {
 
     // Broadcast a usuarios autorizados
     this.connectionManager.sendToAuthorizedUsers(
-      "iot:power_update",
+      "dispositivo:actualizacion_potencia",
       data,
       data.deviceId
     );
@@ -206,7 +206,7 @@ export class IoTEventHandler {
 
     // Broadcast a usuarios autorizados
     this.connectionManager.sendToAuthorizedUsers(
-      "device:reconnection_update",
+      "dispositivo:actualizacion_reconexion",
       data,
       data.deviceId
     );
@@ -303,7 +303,7 @@ export class IoTEventHandler {
 
     // Broadcast a usuarios autorizados
     this.connectionManager.sendToAuthorizedUsers(
-      "control:switch_update",
+      "control:actualizacion_interruptor",
       data,
       data.deviceId
     );
@@ -345,7 +345,7 @@ export class IoTEventHandler {
 
     // Broadcast inmediato para emergencias
     this.connectionManager.broadcastToAll(
-      "alert:emergency_stop",
+      "alerta:parada_emergencia",
       emergencyAlert
     );
   }

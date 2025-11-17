@@ -87,7 +87,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       }
 
       // Enviar evento de voltaje via WebSocket
-      wsManager.sendToRole("admin", "device:voltage_update", {
+      wsManager.sendToRole("admin", "dispositivo:actualizacion_voltaje", {
         deviceId,
         voltage,
         phase,
@@ -98,7 +98,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         eventType: "voltage_reading",
       });
 
-      wsManager.sendToRole("empresa", "device:voltage_update", {
+      wsManager.sendToRole("empresa", "dispositivo:actualizacion_voltaje", {
         deviceId,
         voltage,
         phase,
@@ -140,7 +140,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       }
 
       // Enviar evento de corriente via WebSocket
-      wsManager.sendToRole("admin", "device:current_update", {
+      wsManager.sendToRole("admin", "dispositivo:actualizacion_corriente", {
         deviceId,
         current,
         phase,
@@ -151,7 +151,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         eventType: "current_reading",
       });
 
-      wsManager.sendToRole("empresa", "device:current_update", {
+      wsManager.sendToRole("empresa", "dispositivo:actualizacion_corriente", {
         deviceId,
         current,
         phase,
@@ -201,7 +201,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       }
 
       // Enviar evento de consumo via WebSocket
-      wsManager.sendToRole("admin", "device:power_update", {
+      wsManager.sendToRole("admin", "dispositivo:actualizacion_potencia", {
         deviceId,
         activePower,
         reactivePower,
@@ -214,7 +214,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         eventType: "power_consumption",
       });
 
-      wsManager.sendToRole("empresa", "device:power_update", {
+      wsManager.sendToRole("empresa", "dispositivo:actualizacion_potencia", {
         deviceId,
         activePower,
         reactivePower,
@@ -268,7 +268,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       }
 
       // Enviar evento de conexión via WebSocket
-      wsManager.sendToRole("admin", "device:connection_update", {
+      wsManager.sendToRole("admin", "dispositivo:actualizacion_conexion", {
         deviceId,
         status,
         lastSeen: lastSeen ? new Date(lastSeen) : new Date(),
@@ -278,7 +278,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         eventType: "connection_status",
       });
 
-      wsManager.sendToRole("empresa", "device:connection_update", {
+      wsManager.sendToRole("empresa", "dispositivo:actualizacion_conexion", {
         deviceId,
         status,
         lastSeen: lastSeen ? new Date(lastSeen) : new Date(),
@@ -428,7 +428,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       }
 
       // Enviar lectura de sensor via WebSocket
-      wsManager.sendToRole("admin", "hardware:sensor_update", {
+      wsManager.sendToRole("admin", "hardware:actualizacion_sensor", {
         deviceId,
         sensorType,
         value,
@@ -440,7 +440,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         eventType: "sensor_reading",
       });
 
-      wsManager.sendToRole("empresa", "hardware:sensor_update", {
+      wsManager.sendToRole("empresa", "hardware:actualizacion_sensor", {
         deviceId,
         sensorType,
         value,
@@ -495,7 +495,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       }
 
       // Enviar métricas via WebSocket
-      wsManager.sendToRole("admin", "hardware:metrics_update", {
+      wsManager.sendToRole("admin", "hardware:actualizacion_metricas", {
         deviceId,
         cpuUsage,
         memoryUsage,
@@ -508,7 +508,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         eventType: "performance_metrics",
       });
 
-      wsManager.sendToRole("empresa", "hardware:metrics_update", {
+      wsManager.sendToRole("empresa", "hardware:actualizacion_metricas", {
         deviceId,
         cpuUsage,
         memoryUsage,
@@ -614,7 +614,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
       }
 
       // Enviar comando de control via WebSocket
-      wsManager.sendToRole("admin", "control:switch_update", {
+      wsManager.sendToRole("admin", "control:actualizacion_interruptor", {
         deviceId,
         switchId: switchId || "main",
         state: action === "toggle" ? "auto" : (action as any),
@@ -625,7 +625,7 @@ export function setupRoutes(app: Express, wsManager: WebSocketManager) {
         eventType: "switch_state",
       });
 
-      wsManager.sendToRole("empresa", "control:switch_update", {
+      wsManager.sendToRole("empresa", "control:actualizacion_interruptor", {
         deviceId,
         switchId: switchId || "main",
         state: action === "toggle" ? "auto" : (action as any),
