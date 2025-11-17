@@ -168,10 +168,22 @@ export class IoTEventHandler {
     // Verificar umbrales de potencia
     this.checkPowerThresholds(data, socket.userId);
 
+    // Transformar datos al formato español para el frontend
+    const datosTransformados = {
+      idDispositivo: data.deviceId,
+      potenciaActiva: data.activePower,
+      potenciaReactiva: data.reactivePower,
+      potenciaAparente: data.apparentPower,
+      energia: data.energy,
+      costo: data.cost,
+      ubicacion: data.location,
+      marcaTiempo: data.timestamp || new Date().toISOString(),
+    };
+
     // Broadcast a usuarios autorizados
     this.connectionManager.sendToAuthorizedUsers(
       "dispositivo:actualizacion_potencia",
-      data,
+      datosTransformados,
       data.deviceId
     );
   }
